@@ -18,8 +18,7 @@ package spark.utils;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.Collections;
-import java.util.function.Predicate;
+import java.util.Enumeration;
 import java.util.zip.GZIPOutputStream;
 
 import javax.servlet.http.HttpServletRequest;
@@ -37,8 +36,7 @@ public class GzipUtils {
     private static final String CONTENT_ENCODING = "Content-Encoding";
 
     private static final String GZIP = "gzip";
-
-    private static final StringMatch STRING_MATCH = new StringMatch();
+    private static final String IDENTITY = "identity";
 
     // Hide constructor
     private GzipUtils() {
@@ -55,29 +53,29 @@ public class GzipUtils {
      * output stream.
      * @throws IOException in case of IO error.
      */
-    public static OutputStream checkAndWrap(HttpServletRequest httpRequest, HttpServletResponse httpResponse) throws
-                                                                                                              IOException {
+    public static OutputStream checkAndWrap(HttpServletRequest httpRequest, HttpServletResponse httpResponse) throws IOException {
         OutputStream outputStream = httpResponse.getOutputStream();
 
         // GZIP Support handled here. First we must ensure that we want to use gzip, and that the client supports gzip
-        boolean acceptsGzip = Collections.list(httpRequest.getHeaders(ACCEPT_ENCODING)).stream().anyMatch(STRING_MATCH);
+        boolean acceptsGzip = requestAcceptsGzip(httpRequest.getHeaders(ACCEPT_ENCODING));
         boolean wantGzip = httpResponse.getHeaders(CONTENT_ENCODING).contains(GZIP);
 
         if (acceptsGzip && wantGzip) {
             outputStream = new GZIPOutputStream(outputStream, true);
+        } else if (wantGzip) {
+            // Reset content-encoding header
+            httpResponse.setHeader(CONTENT_ENCODING, IDENTITY);
         }
 
         return outputStream;
     }
 
-    /**
-     * Used instead of lambdas due to risk for java.lang.IncompatibleClassChangeError.
-     */
-    private static class StringMatch implements Predicate<String> {
-        @Override
-        public boolean test(String s) {
-            return s.contains(GZIP);
+    private static boolean requestAcceptsGzip(final Enumeration<String> encodings) {
+        while(encodings.hasMoreElements()) {
+            if (encodings.nextElement().contains(GZIP)) {
+                return true;
+            }
         }
+        return false;
     }
-
 }
